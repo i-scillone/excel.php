@@ -1,3 +1,4 @@
+<?php session_start(); ?>
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -35,22 +36,38 @@ $(function(){
 </head>
 <body>
 <?php
-$buf=glob('*.xls');
+const ALL=<<<SQL
+SELECT num,mag,strftime('%d-%m-%Y', iscr) AS iscriz,strftime('%d-%m-%Y', defin) AS definiz,tipo_def,fonte,num_fonte,anno_fonte,art,dupl,sub 
+FROM proc JOIN reati ON proc.num=reati.proc
+SQL;
+if (isset($_POST['goTo']) && is_dir($_POST['file'])) $_SESSION['cd']=$_POST['file'];
+elseif (!isset($_SESSION['cd'])) $_SESSION['cd']=__DIR__;
+$d=dir($_SESSION['cd']);
 $files='';
-foreach ($buf as $f) {
-    $files.="<option>$f</option>";
+while ($f=$d->read()) {
+    if ($f=='.') continue;
+    $full=realpath($_SESSION['cd'].DIRECTORY_SEPARATOR.$f);
+    $files.=sprintf(
+        '<option value="%s">%s</option>',
+        $full,
+        is_dir($full)? '&#x1F4C2; '.$f: $f
+    );
 }
+$query = $_POST['query']?? ALL;
 ?>
 <form action="index.php" method="post">
-<p>File: <select name="file"><?php echo $files; ?></select></p>
+<p>
+    File: <select name="file"><?php echo $files; ?></select>
+    <button name="goTo" type="submit" title="Vai alla directory selezionata">&#8631;</button>
+</p>
 <p>
     Importa:
     <button name="import" type="submit">Importa</button> 
 </p>
 <p>
-    Query: <textarea name="query" style="vertical-align: top"><?php echo $_POST['query']?? 'select * from sqlite_master;'; ?></textarea>
-    <button name="search" type="submit">Cerca</button>
+    Query: <textarea name="query" style="vertical-align: top"><?php echo $query; ?></textarea>
 </p>
+<p><button name="search" type="submit">Cerca</button></p>
 </form>
 <?php
 function toISO($x)
@@ -123,7 +140,7 @@ HTML;
     }
     echo "</table>\n</div>\n";
 } elseif (isset($_POST['search'])) {
-    $r=$db->query($_POST['query']);
+    $r=$db->query($query);
     if ($r===false) die('<p class="err">Errore PDO: '.$db->errorInfo()[2]."</p>\n");
     echo "<table>\n<tr>\n";
     $tot=$r->columnCount();
