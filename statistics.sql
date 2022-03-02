@@ -11,4 +11,11 @@ CREATE TABLE IF NOT EXISTS "reati" (
   "iter" integer NULL,
   "chiave" text NOT NULL
 );
-CREATE TABLE proc(num INTEGER NOT NULL,mag TEXT,iscr TEXT,defin TEXT,tipo_def TEXT,chiave TEXT NOT NULL);
+CREATE TABLE proc(
+	num INTEGER NOT NULL,
+	mag TEXT,
+	iscr TEXT,
+	defin TEXT,
+	tipo_def TEXT,
+	chiave TEXT NOT NULL
+);
