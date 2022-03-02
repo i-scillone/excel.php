@@ -1,4 +1,5 @@
 *.bak
+*.log
 /*.xls
 /vendor
 /statistics.sqlite

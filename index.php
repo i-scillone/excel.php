@@ -40,7 +40,7 @@ const ALL=<<<SQL
 SELECT num,mag,strftime('%d-%m-%Y', iscr) AS iscriz,strftime('%d-%m-%Y', defin) AS definiz,tipo_def,fonte,num_fonte,anno_fonte,art,dupl,sub
 FROM proc JOIN reati ON proc.num=reati.proc
 SQL;
-if (isset($_POST['goTo']) && is_dir($_POST['file'])) $_SESSION['cd']=$_POST['file'];
+if (isset($_POST['goTo']) && is_dir($_POST['dataSource'])) $_SESSION['cd']=$_POST['dataSource'];
 elseif (!isset($_SESSION['cd'])) $_SESSION['cd']=__DIR__;
 $d=dir($_SESSION['cd']);
 $files='';
@@ -55,14 +55,15 @@ while ($f=$d->read()) {
 }
 $query = $_POST['query']?? ALL;
 ?>
-<form action="index.php" method="post">
+<form action="index.php" method="post" enctype="multipart/form-data">
 <p>
-    File: <select name="file"><?php echo $files; ?></select>
+    File locale: <select name="dataSource"><?php echo $files; ?></select>
     <button name="goTo" type="submit" title="Vai alla directory selezionata">&#8631;</button>
+    <button name="open" type="submit">Apri</button>
 </p>
 <p>
-    <button name="import" type="submit">Importa</button>
-    <button name="view" type="submit">Visualizza</button>
+    Upload: <input name="dataSource" type="file">
+    <button name="upload" type="submit">Carica</button>
 </p>
 <p>
     Query: <textarea name="query" style="vertical-align: top"><?php echo $query; ?></textarea>
@@ -82,8 +83,13 @@ try {
 } catch (PDOException $e) {
     die('<p class="err">Errore PDO: '.$e->getMessage()."</p>\n");
 }
-if (isset($_POST['import'])) {
-    $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($_POST['file']);
+if (isset($_POST['open'])) {
+    $dataSource=$_POST['dataSource'];
+} elseif (isset($_POST['import']) && $_FILES['dataSource']['error']==UPLOAD_ERR_OK) {
+    $dataSource=$_FILES['dataSource']['tmp_name'];
+} else $dataSource=false;
+if ($dataSource) {
+    $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($dataSource);
     $sheet->setActiveSheetIndexByName('Elenco');
     $buf=$sheet->getActiveSheet()->toArray(null, true, true, true);
     $ins=$db->prepare('INSERT INTO proc VALUES(?,?,?,?,?,?)');
@@ -98,6 +104,7 @@ if (isset($_POST['import'])) {
 <table id="sub1">
 HTML;
     foreach ($buf as $rowNo=>$row) {
+        set_time_limit(10);
         if ($rowNo==1) $tag='th';
         else {
             $tag='td';
@@ -114,11 +121,13 @@ HTML;
     echo "</table>\n";
     $sheet->setActiveSheetIndexByName('Elenco Reati');
     $buf=$sheet->getActiveSheet()->toArray(null, true, true, true);
+    file_put_contents('debug.log','count(): '.count($buf),FILE_APPEND);
     $ins=$db->prepare('INSERT INTO reati VALUES(?,?,?,?,?,?,?,?,?,?,?)');
     $r=$db->exec('DELETE FROM reati');
     if ($r===false) die('<p class="err">Errore PDO: '.$ins->errorInfo()[2]."</p>\n");
     echo "<table id=\"sub2\">\n";
     foreach ($buf as $rowNo=>$row) {
+        set_time_limit(10);
         if ($rowNo==1) $tag='th';
         else {
             $tag='td';
@@ -135,16 +144,6 @@ HTML;
             $ins->bindValue(11,$row['K'],PDO::PARAM_STR);
             $ins->execute() or die('<p class="err">Errore PDO: '.$ins->errorInfo()[2]."</p>\n");
         }
-        echo "<tr><$tag>".implode("</$tag><$tag>",$row)."</$tag></tr>\n";
-    }
-    echo "</table>\n</div>\n";
-} elseif (isset($_POST['view'])) {
-    $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($_POST['file']);
-    $buf=$sheet->getActiveSheet()->toArray(null, true, true, true);
-    echo "<table id=\"sub2\">\n";
-    foreach ($buf as $rowNo=>$row) {
-        if ($rowNo==1) $tag='th';
-        else $tag='td';
         echo "<tr><$tag>".implode("</$tag><$tag>",$row)."</$tag></tr>\n";
     }
     echo "</table>\n</div>\n";
