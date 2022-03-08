@@ -37,9 +37,56 @@ $(function(){
 <body>
 <?php
 const ALL=<<<SQL
-SELECT num,mag,strftime('%d-%m-%Y', iscr) AS iscriz,strftime('%d-%m-%Y', defin) AS definiz,tipo_def,fonte,num_fonte,anno_fonte,art,dupl,sub
+SELECT num,mag,DATE_FORMAT(iscr,'%d-%m-%Y') AS iscriz,DATE_FORMAT(defin,'%d-%m-%Y') AS definiz,tipo_def,fonte,num_fonte,anno_fonte,art,dupl,sub
 FROM proc JOIN reati ON proc.num=reati.proc
 SQL;
+class myDB extends PDO
+{
+    public function __construct()
+    {
+        try {
+            parent::__construct('mysql:dbname=from_excel;charset=utf8','script','tpircs');
+        } catch (PDOException $e) {
+            die('<p class="err">Errore PDO: '.$e->getMessage()."</p>\n");
+        }
+        $this->setAttribute(PDO::ATTR_STATEMENT_CLASS,['myDbStat']);
+    }
+    public function myErr()
+    {
+        $inf=debug_backtrace();
+        printf(
+            "<pre class=\"err\">Errore PDO alla riga %d: %s\n\n",
+            $inf[0]['line'],$this->errorInfo()[2]
+        );
+        //$x->debugDumpParams();
+        echo "</pre>\n";
+    }
+}
+class myDbStat extends PDOStatement
+{
+    public function bindValueOrNull($p,$value,$originalType)
+    {
+        if (empty($value)) $type=PDO::PARAM_NULL;
+        else $type=$originalType;
+        return parent::bindValue($p,$value,$type);
+    }
+    public function myErr()
+    {
+        $inf=debug_backtrace();
+        printf(
+            "<pre class=\"err\">Errore PDO alla riga %d: %s\n\n",
+            $inf[0]['line'],$this->errorInfo()[2]
+        );
+        //$x->debugDumpParams();
+        echo "</pre>\n";
+    }
+}
+function toISO($x)
+{
+    if (preg_match('#^(\d{2})/(\d{2})/(\d{4})#',$x,$found)) {
+        return $found[3].'-'.$found[2].'-'.$found[1];
+    } else return null;
+}
 if (isset($_POST['goTo']) && is_dir($_POST['dataSource'])) $_SESSION['cd']=$_POST['dataSource'];
 elseif (!isset($_SESSION['cd'])) $_SESSION['cd']=__DIR__;
 $d=dir($_SESSION['cd']);
@@ -71,18 +118,8 @@ $query = $_POST['query']?? ALL;
 <p><button name="search" type="submit">Cerca</button></p>
 </form>
 <?php
-function toISO($x)
-{
-    if (preg_match('#^(\d{2})/(\d{2})/(\d{4})#',$x,$found)) {
-        return $found[3].'-'.$found[2].'-'.$found[1];
-    } else return '';
-}
 require_once 'autoload.php';
-try {
-    $db=new PDO('sqlite:statistics.sqlite');
-} catch (PDOException $e) {
-    die('<p class="err">Errore PDO: '.$e->getMessage()."</p>\n");
-}
+$db=new myDB();
 if (isset($_POST['open'])) {
     $dataSource=$_POST['dataSource'];
 } elseif (isset($_POST['import']) && $_FILES['dataSource']['error']==UPLOAD_ERR_OK) {
@@ -92,9 +129,8 @@ if ($dataSource) {
     $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($dataSource);
     $sheet->setActiveSheetIndexByName('Elenco');
     $buf=$sheet->getActiveSheet()->toArray(null, true, true, true);
-    $ins=$db->prepare('INSERT INTO proc VALUES(?,?,?,?,?,?)');
     $r=$db->exec('DELETE FROM proc');
-    if ($r===false) die('<p class="err">Errore PDO: '.$ins->errorInfo()[2]."</p>\n");
+    if ($r===false) die($ins->myErr());
     echo <<<HTML
 <div id="tabs">
 <ul>
@@ -103,18 +139,19 @@ if ($dataSource) {
 </ul>
 <table id="sub1">
 HTML;
+    $ins=$db->prepare('INSERT INTO proc VALUES(?,?,?,?,?,?)');
     foreach ($buf as $rowNo=>$row) {
         set_time_limit(10);
         if ($rowNo==1) $tag='th';
         else {
             $tag='td';
-            $ins->bindValue( 1,$row['A'],PDO::PARAM_STR);
-            $ins->bindValue( 2,$row['E'],PDO::PARAM_STR);
-            $ins->bindValue( 3,toISO($row['I']),PDO::PARAM_STR);
-            $ins->bindValue( 4,toISO($row['K']),PDO::PARAM_STR);
-            $ins->bindValue( 5,$row['M'],PDO::PARAM_STR);
-            $ins->bindValue( 6,$row['R'],PDO::PARAM_STR);
-            $ins->execute() or die('<p class="err">Errore PDO: '.$ins->errorInfo()[2]."</p>\n");
+            $ins->bindValue( 1,$row['A'],PDO::PARAM_STR); // num
+            $ins->bindValue( 2,$row['E'],PDO::PARAM_STR); // mag
+            $ins->bindValue( 3,toISO($row['I']),PDO::PARAM_STR); // iscr
+            $ins->bindValueOrNull( 4,toISO($row['K']),PDO::PARAM_STR); // defin
+            $ins->bindValue( 5,$row['M'],PDO::PARAM_STR); // tipo_def
+            $ins->bindValue( 6,$row['R'],PDO::PARAM_STR); //chiave
+            $ins->execute() or die($ins->myErr());
         }
         echo "<tr><$tag>".implode("</$tag><$tag>",$row)."</$tag></tr>\n";
     }
@@ -124,32 +161,32 @@ HTML;
     file_put_contents('debug.log','count(): '.count($buf),FILE_APPEND);
     $ins=$db->prepare('INSERT INTO reati VALUES(?,?,?,?,?,?,?,?,?,?,?)');
     $r=$db->exec('DELETE FROM reati');
-    if ($r===false) die('<p class="err">Errore PDO: '.$ins->errorInfo()[2]."</p>\n");
+    if ($r===false) die($ins->myErr());
     echo "<table id=\"sub2\">\n";
     foreach ($buf as $rowNo=>$row) {
         set_time_limit(10);
         if ($rowNo==1) $tag='th';
         else {
             $tag='td';
-            $ins->bindValue( 1,$row['A'],PDO::PARAM_STR);
-            $ins->bindValue( 2,$row['B'],PDO::PARAM_STR);
-            $ins->bindValue( 3,$row['C'],PDO::PARAM_INT);
-            $ins->bindValue( 4,$row['D'],PDO::PARAM_INT);
-            $ins->bindValue( 5,$row['E'],PDO::PARAM_INT);
-            $ins->bindValue( 6,$row['F'],PDO::PARAM_STR);
-            $ins->bindValue( 7,$row['G'],PDO::PARAM_STR);
-            $ins->bindValue( 8,$row['H'],PDO::PARAM_STR);
-            $ins->bindValue( 9,$row['I'],PDO::PARAM_STR);
-            $ins->bindValue(10,$row['J'],PDO::PARAM_INT);
-            $ins->bindValue(11,$row['K'],PDO::PARAM_STR);
-            $ins->execute() or die('<p class="err">Errore PDO: '.$ins->errorInfo()[2]."</p>\n");
+            $ins->bindValue( 1,$row['A'],PDO::PARAM_STR); // proc
+            $ins->bindValue( 2,$row['B'],PDO::PARAM_STR); // fonte
+            $ins->bindValue( 3,$row['C'],PDO::PARAM_INT); // anno_fonte
+            $ins->bindValue( 4,$row['D'],PDO::PARAM_INT); // num_fonte
+            $ins->bindValue( 5,$row['E'],PDO::PARAM_INT); // art
+            $ins->bindValue( 6,$row['F'],PDO::PARAM_STR); // dupl
+            $ins->bindValue( 7,$row['G'],PDO::PARAM_STR); // sub
+            $ins->bindValue( 8,$row['H'],PDO::PARAM_STR); // tipo
+            $ins->bindValue( 9,$row['I'],PDO::PARAM_STR); // aggr
+            $ins->bindValue(10,$row['J'],PDO::PARAM_INT); // iter
+            $ins->bindValue(11,$row['K'],PDO::PARAM_STR); // chiave
+            $ins->execute() or die($ins->myErr());
         }
         echo "<tr><$tag>".implode("</$tag><$tag>",$row)."</$tag></tr>\n";
     }
     echo "</table>\n</div>\n";
 } elseif (isset($_POST['search'])) {
     $r=$db->query($query);
-    if ($r===false) die('<p class="err">Errore PDO: '.$db->errorInfo()[2]."</p>\n");
+    if ($r===false) die($db->myErr());
     echo "<table>\n<tr>\n";
     $tot=$r->columnCount();
     for ($n=0; $n<$tot; $n++) {
