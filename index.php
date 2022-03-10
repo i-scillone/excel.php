@@ -13,6 +13,7 @@ tr:hover td { background: yellow; }
 .ui-button-text, .ui-selectmenu-menu, .ui-selectmenu-text { font-size: 14px; }
 .ui-selectmenu-button { vertical-align: middle; }
 .CodeMirror { width: 800px; height: 200px !important; margin-bottom: 4px; border: 1px solid black; }
+.feed { font: 12px monospace; }
 </style>
 <script src="/jquery-ui/external/jquery/jquery.min.js"></script>
 <script src="/jquery-ui/jquery-ui.min.js"></script>
@@ -25,7 +26,18 @@ tr:hover td { background: yellow; }
 <script>
 $(function(){
     $('select').selectmenu();
-    $('button').button();
+    $('#goTo').button({
+        icons: { primary: 'ui-icon-arrowrefresh-1-s' },
+        text: false
+    });
+    $('#open, #upload').button({
+        icons: { primary: 'ui-icon-document' },
+        text: false
+    });
+    $('#search').button({
+        icons: { primary: 'ui-icon-search' },
+        text: false
+    });
     $('#tabs').tabs();
     CodeMirror.fromTextArea(
         document.forms[0].query,
@@ -37,8 +49,8 @@ $(function(){
 <body>
 <?php
 const ALL=<<<SQL
-SELECT num,mag,DATE_FORMAT(iscr,'%d-%m-%Y') AS iscriz,DATE_FORMAT(defin,'%d-%m-%Y') AS definiz,tipo_def,fonte,num_fonte,anno_fonte,art,dupl,sub
-FROM proc JOIN reati ON proc.num=reati.proc
+SELECT num, mag, DATE_FORMAT(iscr,'%d-%m-%Y') AS iscriz, DATE_FORMAT(defin, '%d-%m-%Y') AS definiz, tipo_def, CONCAT(abbr.a, ' ',IFNULL(CONCAT(num_fonte, '/', anno_fonte), '')) AS fonte, art, dupl, sub
+FROM proc JOIN reati ON proc.num=reati.proc JOIN abbr ON fonte=abbr.da
 SQL;
 class myDB extends PDO
 {
@@ -105,20 +117,30 @@ $query = $_POST['query']?? ALL;
 <form action="index.php" method="post" enctype="multipart/form-data">
 <p>
     File locale: <select name="dataSource"><?php echo $files; ?></select>
-    <button name="goTo" type="submit" title="Vai alla directory selezionata">&#8631;</button>
-    <button name="open" type="submit">Apri</button>
+    <button id="goTo" name="goTo" type="submit">Vai alla directory selezionata</button>
+    <button id="open" name="open" type="submit">Apri</button>
 </p>
 <p>
     Upload: <input name="dataSource" type="file">
-    <button name="upload" type="submit">Carica</button>
+    <button id="upload" name="upload" type="submit">Carica</button>
 </p>
+<p><input name="noTab" type="checkbox" checked> Non usare la tabella</p>
+<p style="font-size: 12px">N.B. Il “dettaglio filtri Excel”, diversamente dal CSV, contiene la tabella reati.</p>
 <p>
     Query: <textarea name="query" style="vertical-align: top"><?php echo $query; ?></textarea>
 </p>
-<p><button name="search" type="submit">Cerca</button></p>
+<p><button id="search" name="search" type="submit">Cerca</button></p>
 </form>
 <?php
 require_once 'autoload.php';
+const HEADER=<<<HTML
+<div id="tabs">
+<ul>
+    <li><a href="#sub1">Procedimenti</a></li>
+    <li><a href="#sub2">Reati</a></li>
+</ul>
+<table id="sub1">
+HTML;
 $db=new myDB();
 if (isset($_POST['open'])) {
     $dataSource=$_POST['dataSource'];
@@ -131,14 +153,8 @@ if ($dataSource) {
     $buf=$sheet->getActiveSheet()->toArray(null, true, true, true);
     $r=$db->exec('DELETE FROM proc');
     if ($r===false) die($ins->myErr());
-    echo <<<HTML
-<div id="tabs">
-<ul>
-    <li><a href="#sub1">Procedimenti</a></li>
-    <li><a href="#sub2">Reati</a></li>
-</ul>
-<table id="sub1">
-HTML;
+    if (!isset($_POST['noTab'])) echo HEADER;
+    else echo '<p class="feed"><b>Tabella procedimenti:</b> ';
     $ins=$db->prepare('INSERT INTO proc VALUES(?,?,?,?,?,?)');
     foreach ($buf as $rowNo=>$row) {
         set_time_limit(10);
@@ -153,16 +169,22 @@ HTML;
             $ins->bindValue( 6,$row['R'],PDO::PARAM_STR); //chiave
             $ins->execute() or die($ins->myErr());
         }
-        echo "<tr><$tag>".implode("</$tag><$tag>",$row)."</$tag></tr>\n";
+        if (isset($_POST['noTab'])) {
+            if ($rowNo>1) echo $row['A'].' ';
+        } else {
+            echo "<tr><$tag>".implode("</$tag><$tag>",$row)."</$tag></tr>\n";
+        }
     }
-    echo "</table>\n";
+    if (isset($_POST['noTab'])) echo "</p>\n";
+    else echo "</table>\n";
     $sheet->setActiveSheetIndexByName('Elenco Reati');
     $buf=$sheet->getActiveSheet()->toArray(null, true, true, true);
     file_put_contents('debug.log','count(): '.count($buf),FILE_APPEND);
     $ins=$db->prepare('INSERT INTO reati VALUES(?,?,?,?,?,?,?,?,?,?,?)');
     $r=$db->exec('DELETE FROM reati');
     if ($r===false) die($ins->myErr());
-    echo "<table id=\"sub2\">\n";
+    if (isset($_POST['noTab'])) echo '<p class="feed"><b>Tabella reati:</b> ';
+    else echo "<table id=\"sub2\">\n";
     foreach ($buf as $rowNo=>$row) {
         set_time_limit(10);
         if ($rowNo==1) $tag='th';
@@ -181,9 +203,14 @@ HTML;
             $ins->bindValue(11,$row['K'],PDO::PARAM_STR); // chiave
             $ins->execute() or die($ins->myErr());
         }
-        echo "<tr><$tag>".implode("</$tag><$tag>",$row)."</$tag></tr>\n";
+        if (isset($_POST['noTab'])) {
+            if ($rowNo>1) echo $row['A'].' ';
+        } else {
+            echo "<tr><$tag>".implode("</$tag><$tag>",$row)."</$tag></tr>\n";
+        }
     }
-    echo "</table>\n</div>\n";
+    if (isset($_POST['noTab'])) echo "</p>\n";
+    else echo "</table>\n</div>\n";
 } elseif (isset($_POST['search'])) {
     $r=$db->query($query);
     if ($r===false) die($db->myErr());

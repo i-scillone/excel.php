@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Creato il: Mar 07, 2022 alle 11:33
+-- Creato il: Mar 09, 2022 alle 12:14
 -- Versione del server: 10.4.22-MariaDB
 -- Versione PHP: 7.4.28
 
@@ -26,12 +26,39 @@ USE `from_excel`;
 -- --------------------------------------------------------
 
 --
+-- Struttura della tabella `abbr`
+--
+
+DROP TABLE IF EXISTS `abbr`;
+CREATE TABLE `abbr` (
+  `da` varchar(60) NOT NULL,
+  `a` varchar(16) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+--
+-- Dump dei dati per la tabella `abbr`
+--
+
+INSERT INTO `abbr` (`da`, `a`) VALUES
+('CODICE CIVILE', 'C.C.'),
+('CODICE PENALE', 'C.P.'),
+('DECRETO LEGGE', 'D.L.'),
+('DECRETO LEGISLATIVO', 'D.L.vo'),
+('DECRETO LEGISLATIVO DEL CAPO PROVVISORIO DELLO STATO', 'D.L.C.P.S.'),
+('DECRETO PRESIDENTE DELLA REPUBBLICA', 'D.P.R.'),
+('LEGGE', 'L.'),
+('REGIO DECRETO', 'R.D.'),
+('TESTO UNICO', 'T.U.');
+
+-- --------------------------------------------------------
+
+--
 -- Struttura della tabella `proc`
 --
 
 DROP TABLE IF EXISTS `proc`;
 CREATE TABLE `proc` (
-  `num` int(10) UNSIGNED NOT NULL,
+  `num` bigint(20) UNSIGNED NOT NULL,
   `mag` varchar(40) DEFAULT NULL,
   `iscr` date DEFAULT NULL,
   `defin` date DEFAULT NULL,
@@ -47,7 +74,7 @@ CREATE TABLE `proc` (
 
 DROP TABLE IF EXISTS `reati`;
 CREATE TABLE `reati` (
-  `proc` int(10) UNSIGNED NOT NULL,
+  `proc` float UNSIGNED NOT NULL,
   `fonte` varchar(60) DEFAULT NULL,
   `anno_fonte` int(10) UNSIGNED DEFAULT NULL,
   `num_fonte` int(10) UNSIGNED DEFAULT NULL,
@@ -59,6 +86,16 @@ CREATE TABLE `reati` (
   `iter` int(10) UNSIGNED DEFAULT NULL,
   `chiave` char(21) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+--
+-- Indici per le tabelle scaricate
+--
+
+--
+-- Indici per le tabelle `abbr`
+--
+ALTER TABLE `abbr`
+  ADD PRIMARY KEY (`da`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
